@@ -19,6 +19,8 @@ import (
 var (
 	usage = `Usage: aws-signing [options...] <path>
 
+Uses AWS environment variables when aws request signing is enabled.
+
  -a, --aws                Use AWS Request Signing
                           Default: false
                           Env Var: ES_AWS
@@ -30,18 +32,24 @@ var (
                           Default: http://localhost:9200
                           Env Var: ES_ENDPOINT
 
+ -H, --header             Pass custom header(s) to server
+                          Defaults:
+                            Content-Type: application/json
+
  -X, --request <command>  Specify request command to use
                           Default: GET
+
 `
 
 	defaultEndpointUrl = "http://localhost:9200"
-	logger = log.New(os.Stderr,"",0)
+	logger             = log.New(os.Stderr, "", 0)
 )
 
 type Config struct {
 	Data       string
 	Method     string
 	RequestUrl *url.URL
+	Headers    http.Header
 	UseAws     bool
 }
 
@@ -67,17 +75,21 @@ func Parse(args []string) (Config, error) {
 	flags.BoolVar(&useAws, "aws", false, "use aws request signing")
 	flags.BoolVar(&useAws, "a", false, "use aws request signing (shorthand)")
 
+	header := headerFlags{Headers: http.Header{}}
+	flags.Var(&header, "H", "request header")
+	flags.Var(&header, "header", "request header")
+
 	if err := flags.Parse(args[1:]); err != nil {
 		return Config{}, err
+	}
+
+	if _, ok := os.LookupEnv("ES_AWS"); ok {
+		useAws = true
 	}
 
 	if env, ok := os.LookupEnv("ES_ENDPOINT"); endpointUrl == "" && ok {
 		endpointUrl = env
 	}
-	if _, ok := os.LookupEnv("ES_AWS"); ok {
-		useAws = true
-	}
-
 	if endpointUrl == "" {
 		endpointUrl = defaultEndpointUrl
 	}
@@ -86,10 +98,13 @@ func Parse(args []string) (Config, error) {
 		return Config{}, fmt.Errorf("error parsing endpoint url %q: %s", endpointUrl, err)
 	}
 
+	if ct := header.Headers.Get("Content-Type"); ct == "" {
+		header.Headers.Set("Content-Type", "application/json")
+	}
+
 	remaining := flags.Args()
 	if len(remaining) != 1 {
-		flags.Usage()
-		os.Exit(1)
+		return Config{}, fmt.Errorf(usage)
 	}
 
 	additional := strings.TrimPrefix(strings.TrimPrefix(remaining[0], "//"), "/")
@@ -103,6 +118,7 @@ func Parse(args []string) (Config, error) {
 		Method:     method,
 		RequestUrl: requestUrl,
 		UseAws:     useAws,
+		Headers:    header.Headers,
 	}, nil
 }
 

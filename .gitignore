@@ -3,4 +3,5 @@
 
 
 # Golang
+dist/
 vendor/
