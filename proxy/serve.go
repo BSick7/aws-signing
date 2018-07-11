@@ -39,6 +39,9 @@ func newReverseProxy(config cli.Config) (*httputil.ReverseProxy, error) {
 			template.Director(request)
 			request.Host = request.URL.Hostname()
 		},
+		// TODO: We need to rewrite aws_signing_client to drop X-Forwarded-For
+		//         or wrap this transport around a round tripper that drops it
+		// AWS forbids X-Forwarded-For header on signed requests
 		Transport: httpClient.Transport,
 	}
 	return rp, nil
