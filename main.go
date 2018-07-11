@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/BSick7/aws-signing/cli"
+	"github.com/BSick7/aws-signing/proxy"
 )
 
 var logger = log.New(os.Stderr, "", 0)
@@ -17,6 +18,16 @@ func main() {
 		logger.Fatalln(err)
 	}
 
+	if config.ReverseProxy {
+		if err := proxy.Serve(config); err != nil {
+			logger.Fatalf("error serving: %s", err)
+		}
+	} else {
+		request(config)
+	}
+}
+
+func request(config cli.Config) {
 	req, err := http.NewRequest(config.Method, config.RequestUrl.String(), config.RequestBody())
 	if err != nil {
 		logger.Fatalf("error creating http request: %s", err)

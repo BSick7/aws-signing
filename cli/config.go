@@ -39,18 +39,27 @@ Uses AWS environment variables when aws request signing is enabled.
  -X, --request <command>  Specify request command to use
                           Default: GET
 
+ -r, --reverse-proxy      Run reverse proxy using configuration
+                          to reach elasticsearch.
+
+ -p, --reverse-proxy-port Configure reverse proxy server port.
+                          Default: 9200
 `
 
-	defaultEndpointUrl = "http://localhost:9200"
-	logger             = log.New(os.Stderr, "", 0)
+	defaultEndpointUrl      = "http://localhost:9200"
+	defaultReverseProxyPort = 9200
+	logger                  = log.New(os.Stderr, "", 0)
 )
 
 type Config struct {
-	Data       string
-	Method     string
-	RequestUrl *url.URL
-	Headers    http.Header
-	UseAws     bool
+	Data             string
+	Method           string
+	EndpointUrl      *url.URL
+	RequestUrl       *url.URL
+	Headers          http.Header
+	UseAws           bool
+	ReverseProxy     bool
+	ReverseProxyPort int
 }
 
 func Parse(args []string) (Config, error) {
@@ -74,6 +83,14 @@ func Parse(args []string) (Config, error) {
 	var useAws bool
 	flags.BoolVar(&useAws, "aws", false, "use aws request signing")
 	flags.BoolVar(&useAws, "a", false, "use aws request signing (shorthand)")
+
+	var reverseProxy bool
+	flags.BoolVar(&reverseProxy, "reverse-proxy", false, "run reverse proxy")
+	flags.BoolVar(&reverseProxy, "r", false, "run reverse proxy (shorthand)")
+
+	var reverseProxyPort int
+	flags.IntVar(&reverseProxyPort, "reverse-proxy-port", defaultReverseProxyPort, "reverse proxy port")
+	flags.IntVar(&reverseProxyPort, "p", defaultReverseProxyPort, "reverse proxy port (shorthand)")
 
 	header := headerFlags{Headers: http.Header{}}
 	flags.Var(&header, "H", "request header")
@@ -114,11 +131,14 @@ func Parse(args []string) (Config, error) {
 	}
 
 	return Config{
-		Data:       data,
-		Method:     method,
-		RequestUrl: requestUrl,
-		UseAws:     useAws,
-		Headers:    header.Headers,
+		Data:             data,
+		Method:           method,
+		EndpointUrl:      eu,
+		RequestUrl:       requestUrl,
+		UseAws:           useAws,
+		Headers:          header.Headers,
+		ReverseProxy:     reverseProxy,
+		ReverseProxyPort: reverseProxyPort,
 	}, nil
 }
 
@@ -141,7 +161,7 @@ func (c Config) HttpClient() (*http.Client, error) {
 			cfg.Region = region
 		}
 		signer := v4.NewSigner(cfg.Credentials)
-		aws_signing_client.New(signer, nil, "es", cfg.Region)
+		return aws_signing_client.New(signer, nil, "es", cfg.Region)
 	}
 	return http.DefaultClient, nil
 }
