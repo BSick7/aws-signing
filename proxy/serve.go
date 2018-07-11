@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httputil"
 
@@ -18,6 +19,7 @@ func Serve(config cli.Config) error {
 		Addr:    fmt.Sprintf(":%d", config.ReverseProxyPort),
 		Handler: rp,
 	}
+	log.Printf("listening on %s\n", server.Addr)
 	return server.ListenAndServe()
 }
 
@@ -33,7 +35,10 @@ func newReverseProxy(config cli.Config) (*httputil.ReverseProxy, error) {
 	}
 
 	rp := &httputil.ReverseProxy{
-		Director:  template.Director,
+		Director: func(request *http.Request) {
+			template.Director(request)
+			request.Host = request.URL.Hostname()
+		},
 		Transport: httpClient.Transport,
 	}
 	return rp, nil

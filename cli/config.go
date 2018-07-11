@@ -60,6 +60,7 @@ type Config struct {
 	UseAws           bool
 	ReverseProxy     bool
 	ReverseProxyPort int
+	Debug            bool
 }
 
 func Parse(args []string) (Config, error) {
@@ -91,6 +92,12 @@ func Parse(args []string) (Config, error) {
 	var reverseProxyPort int
 	flags.IntVar(&reverseProxyPort, "reverse-proxy-port", defaultReverseProxyPort, "reverse proxy port")
 	flags.IntVar(&reverseProxyPort, "p", defaultReverseProxyPort, "reverse proxy port (shorthand)")
+
+	var creds bool
+	flags.BoolVar(&creds, "creds", false, "emit creds")
+
+	var debug bool
+	flags.BoolVar(&debug, "debug", false, "debug")
 
 	header := headerFlags{Headers: http.Header{}}
 	flags.Var(&header, "H", "request header")
@@ -130,7 +137,7 @@ func Parse(args []string) (Config, error) {
 		return Config{}, fmt.Errorf("error creating request url: %s", err)
 	}
 
-	return Config{
+	c := Config{
 		Data:             data,
 		Method:           method,
 		EndpointUrl:      eu,
@@ -139,7 +146,15 @@ func Parse(args []string) (Config, error) {
 		Headers:          header.Headers,
 		ReverseProxy:     reverseProxy,
 		ReverseProxyPort: reverseProxyPort,
-	}, nil
+		Debug:            debug,
+	}
+
+	if useAws && creds {
+		cfg, _ := external.LoadDefaultAWSConfig()
+		logger.Println(cfg.Credentials.Retrieve())
+	}
+
+	return c, nil
 }
 
 func (c Config) RequestBody() io.Reader {
@@ -161,7 +176,11 @@ func (c Config) HttpClient() (*http.Client, error) {
 			cfg.Region = region
 		}
 		signer := v4.NewSigner(cfg.Credentials)
-		return aws_signing_client.New(signer, nil, "es", cfg.Region)
+		as, err := aws_signing_client.New(signer, nil, "es", cfg.Region)
+		if as != nil && c.Debug {
+			aws_signing_client.SetDebugLog(logger)
+		}
+		return as, err
 	}
 	return http.DefaultClient, nil
 }
