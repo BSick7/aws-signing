@@ -34,10 +34,11 @@ func request(config cli.Config) {
 	}
 	req.Header = config.Headers
 
-	client, err := config.HttpClient()
+	transport, err := config.Transport()
 	if err != nil {
-		logger.Fatalf("error creating http client: %s", err)
+		logger.Fatalf("error creating transport: %s", err)
 	}
+	client := &http.Client{Transport: transport}
 
 	logger.Printf("%s %s\n", req.Method, req.URL)
 	res, err := client.Do(req)
