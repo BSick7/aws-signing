@@ -11,9 +11,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/BSick7/aws-signing/signing"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/BSick7/aws-signing/signing"
 )
 
 var (
@@ -21,16 +21,20 @@ var (
 
 Uses AWS environment variables when aws request signing is enabled.
 
- -a, --aws                Use AWS Request Signing
-                          Default: false
-                          Env Var: ES_AWS
-
  -d, --data <data>        HTTP POST data
                           Specify @- for stdin.
 
- -e, --endpoint <url>     Elasticsearch endpoint url.
+ -a, --aws                Use AWS Request Signing
+                          Default: false
+                          Env Var: AWS_SIGNING
+
+ -e, --endpoint <url>     AWS Endpoint URL.
                           Default: http://localhost:9200
-                          Env Var: ES_ENDPOINT
+                          Env Var: AWS_ENDPOINT
+
+ -s, --service <service>  AWS Service.
+                          Default: es
+                          Env Var: AWS_SERVICE
 
  -H, --header             Pass custom header(s) to server
                           Defaults:
@@ -40,13 +44,14 @@ Uses AWS environment variables when aws request signing is enabled.
                           Default: GET
 
  -r, --reverse-proxy      Run reverse proxy using configuration
-                          to reach elasticsearch.
+                          to reach aws endpoint.
 
  -p, --reverse-proxy-port Configure reverse proxy server port.
                           Default: 9200
 `
 
 	defaultEndpointUrl      = "http://localhost:9200"
+	defaultAwsService       = "es"
 	defaultReverseProxyPort = 9200
 	logger                  = log.New(os.Stderr, "", 0)
 )
@@ -58,6 +63,7 @@ type Config struct {
 	RequestUrl       *url.URL
 	Headers          http.Header
 	UseAws           bool
+	AwsService       string
 	ReverseProxy     bool
 	ReverseProxyPort int
 	Debug            bool
@@ -73,17 +79,21 @@ func Parse(args []string) (Config, error) {
 	flags.StringVar(&data, "data", "", "data")
 	flags.StringVar(&data, "d", "", "data (shorthand)")
 
+	var useAws bool
+	flags.BoolVar(&useAws, "aws", false, "use aws request signing")
+	flags.BoolVar(&useAws, "a", false, "use aws request signing (shorthand)")
+
 	var endpointUrl string
 	flags.StringVar(&endpointUrl, "endpoint", "", "endpoint url")
 	flags.StringVar(&endpointUrl, "e", "", "endpoint url (shorthand)")
 
+	var awsService string
+	flags.StringVar(&awsService, "service", "", "aws service")
+	flags.StringVar(&awsService, "s", "", "aws service (shorthand)")
+
 	var method string
 	flags.StringVar(&method, "request", "", "request method")
 	flags.StringVar(&method, "X", "", "request method (shorthand)")
-
-	var useAws bool
-	flags.BoolVar(&useAws, "aws", false, "use aws request signing")
-	flags.BoolVar(&useAws, "a", false, "use aws request signing (shorthand)")
 
 	var reverseProxy bool
 	flags.BoolVar(&reverseProxy, "reverse-proxy", false, "run reverse proxy")
@@ -107,11 +117,11 @@ func Parse(args []string) (Config, error) {
 		return Config{}, err
 	}
 
-	if _, ok := os.LookupEnv("ES_AWS"); ok {
+	if _, ok := os.LookupEnv("AWS_SIGNING"); ok {
 		useAws = true
 	}
 
-	if env, ok := os.LookupEnv("ES_ENDPOINT"); endpointUrl == "" && ok {
+	if env, ok := os.LookupEnv("AWS_ENDPOINT"); endpointUrl == "" && ok {
 		endpointUrl = env
 	}
 	if endpointUrl == "" {
@@ -120,6 +130,13 @@ func Parse(args []string) (Config, error) {
 	eu, err := url.Parse(endpointUrl)
 	if err != nil {
 		return Config{}, fmt.Errorf("error parsing endpoint url %q: %s", endpointUrl, err)
+	}
+
+	if svc, ok := os.LookupEnv("AWS_SERVICE"); svc == "" && ok {
+		awsService = svc
+	}
+	if awsService == "" {
+		awsService = defaultAwsService
 	}
 
 	if ct := header.Headers.Get("Content-Type"); ct == "" {
@@ -140,9 +157,10 @@ func Parse(args []string) (Config, error) {
 	c := Config{
 		Data:             data,
 		Method:           method,
-		EndpointUrl:      eu,
 		RequestUrl:       requestUrl,
 		UseAws:           useAws,
+		AwsService:       awsService,
+		EndpointUrl:      eu,
 		Headers:          header.Headers,
 		ReverseProxy:     reverseProxy,
 		ReverseProxyPort: reverseProxyPort,
@@ -176,7 +194,7 @@ func (c Config) Transport() (http.RoundTripper, error) {
 			cfg.Region = region
 		}
 		signer := v4.NewSigner(cfg.Credentials)
-		return signing.NewTransport(signer, "es", cfg.Region), nil
+		return signing.NewTransport(signer, c.AwsService, cfg.Region), nil
 	}
 	return http.DefaultTransport, nil
 }
