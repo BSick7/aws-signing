@@ -2,26 +2,20 @@ package signing
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
 
-type MissingSignerError struct{}
-
-func (MissingSignerError) Error() string { return "signer is required to perform http request" }
-
-type MissingServiceError struct{}
-
-func (MissingServiceError) Error() string { return "aws service is required to perform http request" }
-
-type MissingRegionError struct{}
-
-func (MissingRegionError) Error() string { return "aws region is required to perform http request" }
+var (
+	MissingSigner  = errors.New("signer is required to perform http request")
+	MissingService = errors.New("aws service is required to perform http request")
+	MissingRegion  = errors.New("aws region is required to perform http request")
+)
 
 // Signer represents an interface that v1 and v2 aws sdk follows to sign http requests
 type Signer interface {
@@ -30,7 +24,7 @@ type Signer interface {
 
 // Creates a new transport that can be used by http.Client
 // If region is unspecified, AWS_REGION environment variable is used
-func NewTransport(signer Signer, service, region string) http.RoundTripper {
+func NewTransport(signer Signer, service, region string) *Transport {
 	return &Transport{
 		signer:  signer,
 		service: service,
@@ -48,15 +42,13 @@ type Transport struct {
 
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.signer == nil {
-		return nil, MissingSignerError{}
+		return nil, MissingSigner
 	}
 	if t.service == "" {
-		return nil, MissingServiceError{}
+		return nil, MissingService
 	}
 	if t.region == "" {
-		if t.region = os.Getenv("AWS_REGION"); t.region == "" {
-			return nil, MissingRegionError{}
-		}
+		return nil, MissingRegion
 	}
 
 	baseTransport := t.BaseTransport
