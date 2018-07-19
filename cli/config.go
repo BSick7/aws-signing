@@ -10,10 +10,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-
-	"github.com/BSick7/aws-signing/signing"
-	"github.com/aws/aws-sdk-go-v2/aws/external"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
 var (
@@ -21,37 +17,23 @@ var (
 
 Uses AWS environment variables when aws request signing is enabled.
 
- -d, --data <data>        HTTP POST data
-                          Specify @- for stdin.
+ -d, --data <data>            HTTP POST data
+                              Specify @- for stdin.
 
- -a, --aws                Use AWS Request Signing
-                          Default: false
-                          Env Var: AWS_SIGNING
+ -H, --header                 Pass custom header(s) to server
+                              Defaults:
+                                Content-Type: application/json
 
- -e, --endpoint <url>     AWS Endpoint URL.
-                          Default: http://localhost:9200
-                          Env Var: AWS_ENDPOINT
+ -X, --request <command>      Specify request command to use
+                              Default: GET
 
- -s, --service <service>  AWS Service.
-                          Default: es
-                          Env Var: AWS_SERVICE
+ -r, --reverse-proxy          Run reverse proxy using configuration
+                              to reach aws endpoint.
 
- -H, --header             Pass custom header(s) to server
-                          Defaults:
-                            Content-Type: application/json
+ -p, --reverse-proxy-port     Configure reverse proxy server port.
+                              Default: 9200
+` + AwsConfig{}.HelpOptions()
 
- -X, --request <command>  Specify request command to use
-                          Default: GET
-
- -r, --reverse-proxy      Run reverse proxy using configuration
-                          to reach aws endpoint.
-
- -p, --reverse-proxy-port Configure reverse proxy server port.
-                          Default: 9200
-`
-
-	defaultEndpointUrl      = "http://localhost:9200"
-	defaultAwsService       = "es"
 	defaultReverseProxyPort = 9200
 	logger                  = log.New(os.Stderr, "", 0)
 )
@@ -59,14 +41,12 @@ Uses AWS environment variables when aws request signing is enabled.
 type Config struct {
 	Data             string
 	Method           string
-	EndpointUrl      *url.URL
-	RequestUrl       *url.URL
 	Headers          http.Header
-	UseAws           bool
-	AwsService       string
 	ReverseProxy     bool
 	ReverseProxyPort int
 	Debug            bool
+	Aws              AwsConfig
+	RequestUrl       *url.URL
 }
 
 func Parse(args []string) (Config, error) {
@@ -78,18 +58,6 @@ func Parse(args []string) (Config, error) {
 	var data string
 	flags.StringVar(&data, "data", "", "data")
 	flags.StringVar(&data, "d", "", "data (shorthand)")
-
-	var useAws bool
-	flags.BoolVar(&useAws, "aws", false, "use aws request signing")
-	flags.BoolVar(&useAws, "a", false, "use aws request signing (shorthand)")
-
-	var endpointUrl string
-	flags.StringVar(&endpointUrl, "endpoint", "", "endpoint url")
-	flags.StringVar(&endpointUrl, "e", "", "endpoint url (shorthand)")
-
-	var awsService string
-	flags.StringVar(&awsService, "service", "", "aws service")
-	flags.StringVar(&awsService, "s", "", "aws service (shorthand)")
 
 	var method string
 	flags.StringVar(&method, "request", "", "request method")
@@ -103,8 +71,8 @@ func Parse(args []string) (Config, error) {
 	flags.IntVar(&reverseProxyPort, "reverse-proxy-port", defaultReverseProxyPort, "reverse proxy port")
 	flags.IntVar(&reverseProxyPort, "p", defaultReverseProxyPort, "reverse proxy port (shorthand)")
 
-	var creds bool
-	flags.BoolVar(&creds, "creds", false, "emit creds")
+	ac := &AwsConfig{}
+	ac.AddFlags(flags)
 
 	var debug bool
 	flags.BoolVar(&debug, "debug", false, "debug")
@@ -117,27 +85,11 @@ func Parse(args []string) (Config, error) {
 		return Config{}, err
 	}
 
-	if _, ok := os.LookupEnv("AWS_SIGNING"); ok {
-		useAws = true
+	ac.Defaults()
+	if err := ac.Normalize(); err != nil {
+		return Config{}, err
 	}
-
-	if env, ok := os.LookupEnv("AWS_ENDPOINT"); endpointUrl == "" && ok {
-		endpointUrl = env
-	}
-	if endpointUrl == "" {
-		endpointUrl = defaultEndpointUrl
-	}
-	eu, err := url.Parse(endpointUrl)
-	if err != nil {
-		return Config{}, fmt.Errorf("error parsing endpoint url %q: %s", endpointUrl, err)
-	}
-
-	if svc, ok := os.LookupEnv("AWS_SERVICE"); svc == "" && ok {
-		awsService = svc
-	}
-	if awsService == "" {
-		awsService = defaultAwsService
-	}
+	ac.Dump()
 
 	if ct := header.Headers.Get("Content-Type"); ct == "" {
 		header.Headers.Set("Content-Type", "application/json")
@@ -149,7 +101,7 @@ func Parse(args []string) (Config, error) {
 	}
 
 	additional := strings.TrimPrefix(strings.TrimPrefix(remaining[0], "//"), "/")
-	requestUrl, err := url.Parse(strings.TrimSuffix(eu.String(), "/") + "/" + additional)
+	requestUrl, err := url.Parse(strings.TrimSuffix(ac.EndpointUrl.String(), "/") + "/" + additional)
 	if err != nil {
 		return Config{}, fmt.Errorf("error creating request url: %s", err)
 	}
@@ -158,18 +110,11 @@ func Parse(args []string) (Config, error) {
 		Data:             data,
 		Method:           method,
 		RequestUrl:       requestUrl,
-		UseAws:           useAws,
-		AwsService:       awsService,
-		EndpointUrl:      eu,
 		Headers:          header.Headers,
 		ReverseProxy:     reverseProxy,
 		ReverseProxyPort: reverseProxyPort,
 		Debug:            debug,
-	}
-
-	if useAws && creds {
-		cfg, _ := external.LoadDefaultAWSConfig()
-		logger.Println(cfg.Credentials.Retrieve())
+		Aws:              *ac,
 	}
 
 	return c, nil
@@ -185,16 +130,8 @@ func (c Config) RequestBody() io.Reader {
 }
 
 func (c Config) Transport() (http.RoundTripper, error) {
-	if c.UseAws {
-		cfg, err := external.LoadDefaultAWSConfig()
-		if err != nil {
-			return nil, fmt.Errorf("error loading aws config: %s", err)
-		}
-		if region := os.Getenv("AWS_REGION"); region != "" {
-			cfg.Region = region
-		}
-		signer := v4.NewSigner(cfg.Credentials)
-		return signing.NewTransport(signer, c.AwsService, cfg.Region), nil
+	if c.Aws.Use {
+		return c.Aws.Transport()
 	}
 	return http.DefaultTransport, nil
 }
