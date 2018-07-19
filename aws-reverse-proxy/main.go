@@ -18,7 +18,7 @@ Runs a reverse proxy signing any requests upon relay to AWS services.
 
 Options:
 
-  -p, --port                  Reverse proxy port to listen.
+ -p, --port                  Reverse proxy port to listen.
                               Default: 9200
 ` + cli.AwsArgs{}.Options()
 
