@@ -33,6 +33,22 @@
   version = "v1.38.1"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/hashicorp/hcl"
+  packages = [
+    ".",
+    "hcl/ast",
+    "hcl/parser",
+    "hcl/scanner",
+    "hcl/strconv",
+    "hcl/token",
+    "json/parser",
+    "json/scanner",
+    "json/token"
+  ]
+  revision = "ef8a98b0bbce4a65b5aa4c368430a80ddc533168"
+
+[[projects]]
   name = "github.com/jmespath/go-jmespath"
   packages = ["."]
   revision = "0b12d6b5"
@@ -40,6 +56,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3abfd0f4626d88b283e4d1bce316d353c176414faf349afd532b68ceb8c88b7a"
+  inputs-digest = "48735b273a0ff24c486188343b88f39cfeb0d9345adfcb7f714b1057acb7bbba"
   solver-name = "gps-cdcl"
   solver-version = 1
