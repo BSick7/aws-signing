@@ -28,7 +28,7 @@ Options:
 func main() {
 	cfg, err := parse(os.Args)
 	if err != nil {
-		log.Fatalf("error parsing")
+		log.Fatalf("error parsing: %s", err)
 	}
 
 	transport, err := cfg.Aws.Transport()
@@ -38,7 +38,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: signing.NewReverseProxy(cfg.Aws.EndpointUrl, transport),
+		Handler: signing.NewReverseProxy(cfg.Aws.EndpointUrl(), transport),
 	}
 	log.Printf("listening on %s\n", server.Addr)
 	if err := server.ListenAndServe(); err != nil {

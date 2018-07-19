@@ -48,19 +48,16 @@ func (AwsArgs) Options() string {
 }
 
 func (a AwsArgs) Config() (config.Aws, error) {
-	var endpointUrl *url.URL
 	if a.endpoint != "" {
-		eu, err := url.Parse(a.endpoint)
-		if err != nil {
+		if _, err := url.Parse(a.endpoint); err != nil {
 			return config.Aws{}, fmt.Errorf("error parsing endpoint url %q: %s", a.endpoint, err)
 		}
-		endpointUrl = eu
 	}
 
 	return config.Aws{
-		Use:         a.use,
-		EndpointUrl: endpointUrl,
-		Service:     a.service,
+		Use:      a.use,
+		Endpoint: a.endpoint,
+		Service:  a.service,
 	}, nil
 }
 

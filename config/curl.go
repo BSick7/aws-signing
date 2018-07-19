@@ -57,7 +57,7 @@ func MergeCurl(cfgs ...Curl) Curl {
 
 func (c Curl) RequestUrl() string {
 	additional := strings.TrimPrefix(strings.TrimPrefix(c.Path, "//"), "/")
-	requestUrl, _ := url.Parse(strings.TrimSuffix(c.Aws.EndpointUrl.String(), "/") + "/" + additional)
+	requestUrl, _ := url.Parse(strings.TrimSuffix(c.Aws.EndpointUrl().String(), "/") + "/" + additional)
 	return requestUrl.String()
 }
 

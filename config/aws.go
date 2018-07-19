@@ -13,29 +13,33 @@ import (
 
 var (
 	DefaultsAws = Aws{
-		Use:         false,
-		EndpointUrl: &url.URL{Scheme: "http", Host: "localhost:9200"},
-		Service:     "es",
+		Use:      false,
+		Endpoint: "http://localhost:9200",
+		Service:  "es",
 	}
 	EnvAws = Aws{
-		Use:         hasEnvVar("AWS_SIGNING"),
-		EndpointUrl: parseUrl(os.Getenv("AWS_ENDPOINT"), nil),
-		Service:     os.Getenv("AWS_SERVICE"),
+		Use:      hasEnvVar("AWS_SIGNING"),
+		Endpoint: os.Getenv("AWS_ENDPOINT"),
+		Service:  os.Getenv("AWS_SERVICE"),
 	}
 )
 
 type Aws struct {
-	Use         bool     `hcl:"enabled"`
-	Service     string   `hcl:"service"`
-	EndpointUrl *url.URL `hcl:"endpoint-url"`
+	Use      bool   `hcl:"enabled"`
+	Service  string `hcl:"service"`
+	Endpoint string `hcl:"endpoint"`
+}
+
+func (a Aws) EndpointUrl() *url.URL {
+	return parseUrl(a.Endpoint, nil)
 }
 
 func MergeAws(cfgs ...Aws) Aws {
 	rv := Aws{}
 	for _, cur := range cfgs {
 		rv.Use = rv.Use || cur.Use
-		if cur.EndpointUrl != nil {
-			rv.EndpointUrl = cur.EndpointUrl
+		if cur.Endpoint != "" {
+			rv.Endpoint = cur.Endpoint
 		}
 		if cur.Service != "" {
 			rv.Service = cur.Service
@@ -44,7 +48,7 @@ func MergeAws(cfgs ...Aws) Aws {
 	return rv
 }
 
-func (c Aws) Transport() (http.RoundTripper, error) {
+func (a Aws) Transport() (http.RoundTripper, error) {
 	cfg, err := external.LoadDefaultAWSConfig()
 	if err != nil {
 		return nil, fmt.Errorf("error loading aws config: %s", err)
@@ -53,5 +57,5 @@ func (c Aws) Transport() (http.RoundTripper, error) {
 		cfg.Region = region
 	}
 	signer := v4.NewSigner(cfg.Credentials)
-	return signing.NewTransport(signer, c.Service, cfg.Region), nil
+	return signing.NewTransport(signer, a.Service, cfg.Region), nil
 }
