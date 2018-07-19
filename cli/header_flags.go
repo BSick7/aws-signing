@@ -6,15 +6,15 @@ import (
 	"strings"
 )
 
-type headerFlags struct {
+type HeaderFlags struct {
 	Headers http.Header
 }
 
-func (f *headerFlags) String() string {
+func (f *HeaderFlags) String() string {
 	return "request headers"
 }
 
-func (f *headerFlags) Set(value string) error {
+func (f *HeaderFlags) Set(value string) error {
 	tokens := strings.SplitN(value, ":", 2)
 	if len(tokens) != 2 {
 		return fmt.Errorf("invalid header %q", value)
