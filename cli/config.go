@@ -13,7 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/sha1sum/aws_signing_client"
+	"github.com/BSick7/aws-signing/signing"
 )
 
 var (
@@ -166,21 +166,17 @@ func (c Config) RequestBody() io.Reader {
 	return bytes.NewBufferString(c.Data)
 }
 
-func (c Config) HttpClient() (*http.Client, error) {
+func (c Config) Transport() (http.RoundTripper, error) {
 	if c.UseAws {
 		cfg, err := external.LoadDefaultAWSConfig()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error loading aws config: %s", err)
 		}
 		if region := os.Getenv("AWS_REGION"); region != "" {
 			cfg.Region = region
 		}
 		signer := v4.NewSigner(cfg.Credentials)
-		as, err := aws_signing_client.New(signer, nil, "es", cfg.Region)
-		if as != nil && c.Debug {
-			aws_signing_client.SetDebugLog(logger)
-		}
-		return as, err
+		return signing.NewTransport(signer, "es", cfg.Region), nil
 	}
-	return http.DefaultClient, nil
+	return http.DefaultTransport, nil
 }
