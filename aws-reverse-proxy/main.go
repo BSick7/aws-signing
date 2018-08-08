@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -13,7 +12,7 @@ import (
 )
 
 var (
-	usage = `aws-reverse-proxy [options...]
+	usage = `Usage: aws-reverse-proxy [options...]
 Runs a reverse proxy signing any requests upon relay to AWS services.
 
 Options:
@@ -28,28 +27,30 @@ Options:
 func main() {
 	cfg, err := parse(os.Args)
 	if err != nil {
-		log.Fatalf("error parsing: %s", err)
+		fmt.Println("error parsing")
+		os.Exit(1)
 	}
 
 	transport, err := cfg.Aws.Transport()
 	if err != nil {
-		log.Fatalf("error creating transport: %s\n", err)
+		fmt.Printf("error creating transport: %s\n", err)
+		os.Exit(1)
 	}
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: signing.NewReverseProxy(cfg.Aws.EndpointUrl(), transport),
 	}
-	log.Printf("listening on %s\n", server.Addr)
+	fmt.Printf("listening on %s\n", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
-		log.Println(err)
+		fmt.Println(err)
 	}
 }
 
 func parse(args []string) (config.ReverseProxy, error) {
 	flags := flag.NewFlagSet("aws-reverse-proxy", flag.ContinueOnError)
 	flags.Usage = func() {
-		log.Println(usage)
+		fmt.Println(usage)
 	}
 
 	var port int
