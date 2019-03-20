@@ -1,3 +1,7 @@
+## 0.2.1 (Mar 20, 2019)
+
+  * Now dropping `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto` headers from proxied request.
+
 ## 0.2.0 (Jul 19, 2018)
 
   * Rebuilding as CLI and library with own signing transport.

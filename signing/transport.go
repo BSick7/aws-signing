@@ -74,6 +74,7 @@ func (t *Transport) sign(req *http.Request) error {
 	// AWS forbids signed requests that are forwarded, drop headers
 	req.Header.Del("X-Forwarded-For")
 	req.Header.Del("X-Forwarded-Host")
+	req.Header.Del("X-Forwarded-Port")
 	req.Header.Del("X-Forwarded-Proto")
 
 	date := time.Now()
