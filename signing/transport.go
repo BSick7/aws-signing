@@ -71,8 +71,10 @@ func (t *Transport) sign(req *http.Request) error {
 		req.URL.RawPath = escapePath(req.URL.RawPath, false)
 	}
 
-	// AWS forbids signed requests that contain X-Forwarded-For header
+	// AWS forbids signed requests that are forwarded, drop headers
 	req.Header.Del("X-Forwarded-For")
+	req.Header.Del("X-Forwarded-Host")
+	req.Header.Del("X-Forwarded-Proto")
 
 	date := time.Now()
 	req.Header.Set("Date", date.Format(time.RFC3339))
