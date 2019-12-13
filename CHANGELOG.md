@@ -1,3 +1,8 @@
+## 0.2.3 (Dec 13, 2019)
+
+  * Upgraded aws-sdk-go-v2 to v0.18.0
+  * Tagged hcl to v1.0.0.
+
 ## 0.2.2 (Aug 07, 2019)
 
   * Upgrade to AWS SDK for Go version 0.10.0
