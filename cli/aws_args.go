@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -8,7 +9,7 @@ import (
 	"os"
 
 	"github.com/BSick7/aws-signing/config"
-	"github.com/aws/aws-sdk-go-v2/aws/external"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 )
 
 type AwsArgs struct {
@@ -66,7 +67,7 @@ func (a AwsArgs) Dump() {
 		return
 	}
 	if _, ok := os.LookupEnv("AWS_SIGNING"); a.use || ok {
-		cfg, _ := external.LoadDefaultAWSConfig()
-		log.Println(cfg.Credentials.Retrieve())
+		cfg, _ := awsconfig.LoadDefaultConfig(context.TODO())
+		log.Println(cfg.Credentials.Retrieve(context.TODO()))
 	}
 }

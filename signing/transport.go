@@ -2,8 +2,11 @@ package signing
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -15,20 +18,24 @@ var (
 	MissingSigner  = errors.New("signer is required to perform http request")
 	MissingService = errors.New("aws service is required to perform http request")
 	MissingRegion  = errors.New("aws region is required to perform http request")
+
+	// emptyStringSHA256 is a SHA256 of an empty string
+	emptyStringSHA256 = `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
 )
 
 // Signer represents an interface that v1 and v2 aws sdk follows to sign http requests
 type Signer interface {
-	Sign(r *http.Request, body io.ReadSeeker, service, region string, signTime time.Time) (http.Header, error)
+	SignHTTP(ctx context.Context, credentials aws.Credentials, r *http.Request, payloadHash string, service string, region string, signingTime time.Time, optFns ...func(options *v4.SignerOptions)) error
 }
 
 // Creates a new transport that can be used by http.Client
 // If region is unspecified, AWS_REGION environment variable is used
-func NewTransport(signer Signer, service, region string) *Transport {
+func NewTransport(signer Signer, service, region string, creds aws.Credentials) *Transport {
 	return &Transport{
 		signer:  signer,
 		service: service,
 		region:  region,
+		creds:   creds,
 	}
 }
 
@@ -38,6 +45,7 @@ type Transport struct {
 	signer        Signer
 	service       string
 	region        string
+	creds         aws.Credentials
 }
 
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -82,7 +90,9 @@ func (t *Transport) sign(req *http.Request) error {
 
 	if body, err := t.rebuildBody(req); err != nil {
 		return err
-	} else if _, err := t.signer.Sign(req, body, t.service, t.region, date); err != nil {
+	} else if ph, err := payloadHash(body); err != nil {
+		return err
+	} else if err := t.signer.SignHTTP(req.Context(), t.creds, req, ph, t.service, t.region, date); err != nil {
 		return fmt.Errorf("error signing request: %s", err)
 	}
 	return nil

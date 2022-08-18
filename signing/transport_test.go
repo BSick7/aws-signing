@@ -1,6 +1,8 @@
 package signing
 
 import (
+	"context"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"net/http"
 	"testing"
 
@@ -17,21 +19,27 @@ func (m mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestTransport_All(t *testing.T) {
-	signer := v4.NewSigner(aws.NewStaticCredentialsProvider("a", "b", "c"))
+	credsProvider := credentials.NewStaticCredentialsProvider("a", "b", "c")
+	creds, err := credsProvider.Retrieve(context.TODO())
+	if err != nil {
+		t.Error(err)
+	}
+	signer := v4.NewSigner()
 	tests := []struct {
 		signer  Signer
 		service string
 		region  string
+		creds   aws.Credentials
 		wantErr string
 	}{
-		{nil, "", "", MissingSigner.Error()},
-		{signer, "", "", MissingService.Error()},
-		{signer, "es", "", MissingRegion.Error()},
-		{signer, "es", "us-east-1", ""},
+		{nil, "", "", creds, MissingSigner.Error()},
+		{signer, "", "", creds, MissingService.Error()},
+		{signer, "es", "", creds, MissingRegion.Error()},
+		{signer, "es", "us-east-1", creds, ""},
 	}
 
 	for i, test := range tests {
-		transport := NewTransport(test.signer, test.service, test.region)
+		transport := NewTransport(test.signer, test.service, test.region, test.creds)
 		gotAuthorization := ""
 		transport.BaseTransport = mockTransport{
 			RoundTripFunc: func(req *http.Request) (*http.Response, error) {
